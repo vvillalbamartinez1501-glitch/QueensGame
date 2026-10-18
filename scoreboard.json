@@ -1,0 +1,32 @@
+{
+    "8x8": [
+        {
+            "time_seconds": 0,
+            "time_formatted": "00:00",
+            "moves": 8,
+            "date": "2026-10-18 01:11:44"
+        }
+    ],
+    "4x4": [
+        {
+            "time_seconds": 14,
+            "time_formatted": "00:14",
+            "moves": 7,
+            "date": "2026-10-18 01:18:42"
+        },
+        {
+            "time_seconds": 14,
+            "time_formatted": "00:14",
+            "moves": 15,
+            "date": "2026-10-18 01:12:19"
+        }
+    ],
+    "5x5": [
+        {
+            "time_seconds": 25,
+            "time_formatted": "00:25",
+            "moves": 6,
+            "date": "2026-10-18 13:32:44"
+        }
+    ]
+}
