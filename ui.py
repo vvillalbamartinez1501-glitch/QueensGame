@@ -103,12 +103,12 @@ class QueensUI:
         title_lbl = tk.Label(top_row, text="👑 QUEENS", font=self.font_title, fg="#F8FAFC", bg="#0F172A")
         title_lbl.pack(side="left")
 
-        rules_btn = tk.Button(
+        self.rules_btn = tk.Button(
             top_row, text="📖 Reglas", font=self.font_btn_sm, bg="#334155", fg="#F8FAFC",
             activebackground="#475569", activeforeground="#FFFFFF", relief="flat", bd=0,
             padx=10, pady=4, cursor="hand2", command=self.show_rules_dialog
         )
-        rules_btn.pack(side="right", padx=(6, 0))
+        self.rules_btn.pack(side="right", padx=(6, 0))
 
         self.records_btn = tk.Button(
             top_row, text="🏆 Récords", font=self.font_btn_sm, bg="#D97706", fg="#FFFFFF",

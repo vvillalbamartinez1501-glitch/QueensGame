@@ -5,6 +5,18 @@
             "time_formatted": "00:00",
             "moves": 8,
             "date": "2026-10-18 01:11:44"
+        },
+        {
+            "time_seconds": 11,
+            "time_formatted": "00:11",
+            "moves": 8,
+            "date": "2026-10-18 19:56:21"
+        },
+        {
+            "time_seconds": 13,
+            "time_formatted": "00:13",
+            "moves": 29,
+            "date": "2026-10-18 20:00:27"
         }
     ],
     "4x4": [

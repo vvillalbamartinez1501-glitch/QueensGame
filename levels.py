@@ -128,19 +128,69 @@ def generate_board(n: int = 8) -> Tuple[List[List[int]], List[Tuple[int, int]]]:
                 break
         if not queens:
             queens = [(r, (r * 2 + 1) % n) for r in range(n)]
-        # 2. Inicializar regiones en cada celda origen de reina
+        # Reservar algunas regiones pequeñas y repartir el resto entre varios colores.
+        small_count = random.randint(1, max(1, n // 3))
+        small_regions = set(random.sample(range(n), k=small_count))
+        region_sizes = [1] * n
+        for reg in small_regions:
+            region_sizes[reg] = random.choices(
+                [1, 2, 3, 4], weights=[1, 2, 3, 3], k=1
+            )[0]
+        large_regions = [reg for reg in range(n) if reg not in small_regions]
+        remaining = n * n - sum(region_sizes)
+        for _ in range(remaining):
+            region_sizes[random.choice(large_regions)] += 1
+
+        # 3. Inicializar regiones en cada celda origen de reina
         grid = [[-1 for _ in range(n)] for _ in range(n)]
         frontiers: Dict[int, List[Tuple[int, int]]] = {i: [queens[i]] for i in range(n)}
         for i in range(n):
             r, c = queens[i]
             grid[r][c] = i
-        # 3. Crecimiento tipo Voronoi aleatorio para formar regiones conexas e irregulares
+        region_counts = [1] * n
+
+        # Algunas regiones pequeñas se reservan como segmentos de una fila o columna.
+        line_regions: Set[int] = set()
+        eligible = [
+            reg for reg in small_regions if 2 <= region_sizes[reg] < n
+        ]
+        line_count = int(bool(eligible) and random.random() < 0.4)
+        random.shuffle(eligible)
+        for reg in eligible:
+            if len(line_regions) >= line_count:
+                break
+            row, col = queens[reg]
+            size = region_sizes[reg]
+            options = []
+            for start in range(max(0, col - size + 1), min(col, n - size) + 1):
+                cells = [(row, c) for c in range(start, start + size)]
+                if all(grid[r][c] in (-1, reg) for r, c in cells):
+                    options.append(cells)
+            for start in range(max(0, row - size + 1), min(row, n - size) + 1):
+                cells = [(r, col) for r in range(start, start + size)]
+                if all(grid[r][c] in (-1, reg) for r, c in cells):
+                    options.append(cells)
+            if options:
+                for r, c in random.choice(options):
+                    grid[r][c] = reg
+                    region_counts[reg] += 1
+                line_regions.add(reg)
+
+        frontiers = {
+            reg: [(r, c) for r in range(n) for c in range(n) if grid[r][c] == reg]
+            for reg in range(n)
+        }
+
+        # 4. Crecimiento aleatorio con límites para favorecer tamaños pequeños
         unassigned = n * n - n
+        unassigned -= sum(region_sizes[reg] - 1 for reg in line_regions)
         while unassigned > 0:
-            order = list(range(n))
-            random.shuffle(order)
-            moved = False
-            for reg in order:
+            active_regions = []
+            for reg in range(n):
+                if reg in line_regions:
+                    continue
+                if region_counts[reg] >= region_sizes[reg]:
+                    continue
                 cands = []
                 for r, c in frontiers[reg]:
                     for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
@@ -148,15 +198,36 @@ def generate_board(n: int = 8) -> Tuple[List[List[int]], List[Tuple[int, int]]]:
                         if 0 <= nr < n and 0 <= nc < n and grid[nr][nc] == -1:
                             cands.append((nr, nc))
                 if cands:
+                    active_regions.append((reg, cands))
+            if active_regions:
+                reg, cands = random.choice(active_regions)
+                nr, nc = random.choice(cands)
+                grid[nr][nc] = reg
+                frontiers[reg].append((nr, nc))
+                region_counts[reg] += 1
+                unassigned -= 1
+            else:
+                # Si las cuotas bloquean el crecimiento, completar regiones conectadas.
+                fallback_regions = []
+                for reg in range(n):
+                    if reg in line_regions:
+                        continue
+                    cands = []
+                    for r, c in frontiers[reg]:
+                        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                            nr, nc = r + dr, c + dc
+                            if 0 <= nr < n and 0 <= nc < n and grid[nr][nc] == -1:
+                                cands.append((nr, nc))
+                    if cands:
+                        fallback_regions.append((reg, cands))
+                if fallback_regions:
+                    reg, cands = random.choice(fallback_regions)
                     nr, nc = random.choice(cands)
                     grid[nr][nc] = reg
                     frontiers[reg].append((nr, nc))
+                    region_counts[reg] += 1
                     unassigned -= 1
-                    moved = True
-                    if unassigned == 0:
-                        break
-            if not moved:
-                # rellenar celdas huérfanas asignándolas a una región adyacente
+                    continue
                 for r in range(n):
                     for c in range(n):
                         if grid[r][c] == -1:
@@ -167,7 +238,7 @@ def generate_board(n: int = 8) -> Tuple[List[List[int]], List[Tuple[int, int]]]:
                                     unassigned -= 1
                                     break
                 break
-        # 4. Verificar unicidad
+        # 5. Verificar unicidad
         known_cols = [c for _, c in queens]
         if count_alternative_solutions(grid, known_cols, limit=2) == 0:
             return grid, queens
