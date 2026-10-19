@@ -21,6 +21,12 @@
     ],
     "4x4": [
         {
+            "time_seconds": 11,
+            "time_formatted": "00:11",
+            "moves": 4,
+            "date": "2026-10-20 00:41:33"
+        },
+        {
             "time_seconds": 14,
             "time_formatted": "00:14",
             "moves": 7,
