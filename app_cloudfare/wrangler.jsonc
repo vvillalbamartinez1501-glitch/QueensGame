@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "queens-game",
+  "compatibility_date": "2026-10-19",
+  "pages_build_output_dir": "./build/web",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "queens-game",
+      "database_id": "00000000000000000000000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

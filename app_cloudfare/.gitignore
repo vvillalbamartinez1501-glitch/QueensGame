@@ -1,0 +1,10 @@
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+.wrangler/
+.dev.vars
+.env
+node_modules/
