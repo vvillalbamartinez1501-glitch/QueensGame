@@ -7,7 +7,7 @@
     {
       "binding": "DB",
       "database_name": "queens-game",
-      "database_id": "00000000000000000000000000000000",
+      "database_id": "2712350a-a9a7-4e0a-bf5d-00b2c81a80d8",
       "migrations_dir": "migrations"
     }
   ]
