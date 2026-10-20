@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'services/api_service.dart';
 
@@ -185,6 +186,18 @@ class _GameScreenState extends State<GameScreen> {
     final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
     final remaining = (seconds % 60).toString().padLeft(2, '0');
     return '$minutes:$remaining';
+  }
+
+  Future<void> _openLegalPage(String path) async {
+    final opened = await launchUrl(
+      Uri.base.resolve(path),
+      webOnlyWindowName: '_blank',
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir el documento legal.')),
+      );
+    }
   }
 
   Color _regionColor(int region) =>
@@ -648,6 +661,28 @@ class _GameScreenState extends State<GameScreen> {
                 ],
               ),
             ),
+      bottomNavigationBar: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Divider(height: 1, color: Color(0xFF334155)),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              children: [
+                TextButton(
+                  onPressed: () => _openLegalPage('terms.html'),
+                  child: const Text('Condiciones del servicio'),
+                ),
+                TextButton(
+                  onPressed: () => _openLegalPage('privacy.html'),
+                  child: const Text('Política de privacidad'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

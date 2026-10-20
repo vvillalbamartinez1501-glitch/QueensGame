@@ -49,12 +49,16 @@ y [cuotas de D1](https://developers.cloudflare.com/d1/platform/pricing/).
   puede ampliarse antes de desplegar.
 - La fecha de los récords se guarda en UTC con el mismo formato que usaba la
   interfaz.
+- Consulta [la explicación de la generación de mapas](./generación%20mapas%20explicacion.md)
+  para saber cuántos hay, cómo se eligen y por qué pueden repetirse.
 
 ## Archivos principales
 
 - `lib/`, `web/`, `pubspec.yaml` y `pubspec.lock`: cliente Flutter web.
 - `functions/api/`: implementación de los endpoints de la API.
 - `migrations/0001_initial.sql`: tablas de partidas y récords.
+- `web/terms.html` y `web/privacy.html`: documentos legales enlazados desde
+  la aplicación; verifica y completa los datos del titular antes de publicar.
 - `puzzles.json`: niveles precomputados para el límite de CPU gratuito.
 - `wrangler.jsonc`: configuración de Pages y binding D1 `DB`.
 - `build.sh`: compila Flutter Web; si no encuentra Flutter, descarga el canal
@@ -108,7 +112,7 @@ actualizaciones normales de la web.
    - **Root directory:** `app_cloudfare`.
    - **Framework preset:** `None`.
    - **Build command:** `bash build.sh`.
-   - **Build output directory:** `build/web`.
+   - **Build output directory:** `build/web`. // todo: configrar
 4. En **Settings → Functions → D1 database bindings**, añade:
    - **Variable name / binding:** `DB`
    - **D1 database:** `queens-game`
@@ -144,6 +148,8 @@ Cloudflare mostrará la URL pública al terminar, por ejemplo
    - completar una solución y confirmar que aparece el récord;
    - consultar la misma partida desde su identificador usando
      `/api/games/<game_id>` y confirmar que D1 devuelve su estado guardado.
+   - abrir los enlaces **Condiciones del servicio** y **Política de privacidad**
+     al final de la pantalla y comprobar que las páginas públicas cargan.
 3. Si la API responde `Error interno del servidor`, revisa los logs de Functions
    en Cloudflare y confirma que el binding `DB` existe en el entorno publicado.
    Si responde un error SQL, revisa que ejecutaste la migración en esa base D1.
@@ -192,3 +198,20 @@ migraciones remotas salvo que realmente quieras modificar la base publicada.
 GitHub guarda el código; Cloudflare Pages publica la web; Pages Functions ejecuta
 la API; D1 persiste los datos. Publicar en GitHub por sí solo no despliega el
 sitio ni crea la base de datos.
+
+### Documentos legales y Discord
+
+Las páginas legales son borradores informativos, no asesoramiento ni garantía de
+cumplimiento. Antes de publicar o enviar la Activity a revisión, completa y
+verifica en ambas páginas el nombre legal del responsable y su domicilio
+geográfico completo (incluidos municipio y provincia; añade los datos fiscales
+o registrales cuando sean exigibles). Revisa también los tratamientos de datos,
+la retención real de D1 y los términos de Discord vigentes. Si incorporas el
+Embedded App SDK, permisos, autenticación o datos de Discord, actualiza la
+política antes de habilitar esas funciones y solicita revisión jurídica para
+los países a los que ofrezcas el servicio.
+
+Tras desplegar, las páginas estarán en `https://<proyecto>.pages.dev/terms.html`
+y `https://<proyecto>.pages.dev/privacy.html` (sustituye el host por el dominio
+real). Configura esas direcciones en los campos de términos y privacidad de la
+aplicación en el Developer Portal de Discord.

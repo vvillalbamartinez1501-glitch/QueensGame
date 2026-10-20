@@ -1,0 +1,3 @@
+/*
+  ! X-Frame-Options
+  Content-Security-Policy: frame-ancestors 'self' https://*.discordsays.com https://discord.com
