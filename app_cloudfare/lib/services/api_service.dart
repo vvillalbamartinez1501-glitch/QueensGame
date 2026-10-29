@@ -1,125 +1,107 @@
 import 'dart:convert';
-
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
-const _defaultApiBaseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: '',
-);
-
 class ApiException implements Exception {
-  const ApiException(this.message);
-
   final String message;
-
+  final int? statusCode;
+  ApiException(this.message, {this.statusCode});
   @override
-  String toString() => message;
+  String toString() => 'ApiException: $message';
 }
 
 class ApiService {
-  ApiService({http.Client? client, String? baseUrl})
-      : _client = client ?? http.Client(),
-        _baseUrl = (baseUrl ?? _defaultApiBaseUrl).replaceFirst(
-          RegExp(r'/$'),
-          '',
-        );
+  static const Duration _timeout = Duration(seconds: 15);
 
-  final http.Client _client;
-  final String _baseUrl;
+  static String get _baseUrl {
+    if (kIsWeb) return Uri.base.origin;
+    return 'https://queens-game.pages.dev';
+  }
 
-  Uri _uri(String path) => _baseUrl.isEmpty
-      ? Uri.base.resolve(path)
-      : Uri.parse('$_baseUrl$path');
-
-  Future<Map<String, dynamic>> _request(
+  static Future<Map<String, dynamic>> _request(
     String method,
     String path, {
-    Map<String, Object?>? body,
+    Map<String, dynamic>? body,
   }) async {
+    final uri = Uri.parse('$_baseUrl$path');
+    http.Response response;
+    final headers = {'Content-Type': 'application/json'};
+
     try {
-      final uri = _uri(path);
-      final headers = {'Content-Type': 'application/json'};
-      const timeout = Duration(seconds: 12);
-      late final http.Response response;
       if (method == 'GET') {
-        response = await _client.get(uri, headers: headers).timeout(timeout);
+        response = await http.get(uri, headers: headers).timeout(_timeout);
       } else if (method == 'POST') {
-        response = await _client.post(
-          uri,
-          headers: headers,
-          body: jsonEncode(body ?? const {}),
-        ).timeout(timeout);
+        response = await http
+            .post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+            .timeout(_timeout);
       } else if (method == 'PUT') {
-        response = await _client.put(
-          uri,
-          headers: headers,
-          body: jsonEncode(body ?? const {}),
-        ).timeout(timeout);
+        response = await http
+            .put(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+            .timeout(_timeout);
       } else {
-        throw ApiException('Método HTTP no soportado: $method');
+        throw ApiException('Unsupported HTTP method: $method');
       }
-      final decoded = jsonDecode(response.body);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        final detail = decoded is Map<String, dynamic>
-            ? decoded['detail']?.toString()
-            : null;
-        throw ApiException(detail ?? 'Error del servidor (${response.statusCode}).');
-      }
-      if (decoded is! Map<String, dynamic>) {
-        throw const ApiException('El servidor devolvió una respuesta inválida.');
-      }
-      return decoded;
-    } on ApiException {
-      rethrow;
-    } on FormatException {
-      throw const ApiException('El servidor devolvió JSON inválido.');
-    } catch (error) {
-      throw ApiException('No se pudo conectar con el servidor: $error');
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException('Network error: ${e.toString()}');
     }
+
+    final decoded = jsonDecode(response.body);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return decoded as Map<String, dynamic>;
+    }
+    final detail = decoded is Map ? (decoded['detail'] ?? decoded['error'] ?? 'Unknown error') : 'Unknown error';
+    throw ApiException(detail.toString(), statusCode: response.statusCode);
   }
 
-  Future<Map<String, dynamic>> createGame(int size, bool autoCross) =>
-      _request('POST', '/api/games', body: {
-        'size': size,
-        'auto_cross': autoCross,
-      });
-
-  Future<Map<String, dynamic>> getGame(String id) =>
-      _request('GET', '/api/games/$id');
-
-  Future<Map<String, dynamic>> updateCell(
-    String id,
-    int row,
-    int col,
-    String action,
-  ) =>
-      _request('POST', '/api/games/$id/cells', body: {
-        'row': row,
-        'col': col,
-        'action': action,
-      });
-
-  Future<Map<String, dynamic>> undo(String id) =>
-      _request('POST', '/api/games/$id/undo');
-
-  Future<Map<String, dynamic>> reset(String id) =>
-      _request('POST', '/api/games/$id/reset');
-
-  Future<Map<String, dynamic>> hint(String id) =>
-      _request('POST', '/api/games/$id/hint');
-
-  Future<Map<String, dynamic>> setAutoCross(String id, bool enabled) =>
-      _request('PUT', '/api/games/$id/settings/auto-cross', body: {
-        'enabled': enabled,
-      });
-
-  Future<List<dynamic>> getRecords(int size) async {
-    final result = await _request('GET', '/api/scoreboard?size=$size');
-    return result['records'] as List<dynamic>;
+  /// Starts a new game with the given board size.
+  static Future<Map<String, dynamic>> createGame(int size) async {
+    return _request('POST', '/api/games', body: {'size': size});
   }
 
-  Future<Map<String, dynamic>> getRules() =>
-      _request('GET', '/api/rules');
+  /// Fetches current game state.
+  static Future<Map<String, dynamic>> getGame(String id) async {
+    return _request('GET', '/api/games/$id');
+  }
 
-  void close() => _client.close();
+  /// Places or removes a queen/cross on a cell.
+  /// [action]: "queen", "cross", "empty"
+  static Future<Map<String, dynamic>> updateCell(
+      String id, int row, int col, String action) async {
+    return _request('POST', '/api/games/$id/cells',
+        body: {'row': row, 'col': col, 'action': action});
+  }
+
+  /// Undoes the last move.
+  static Future<Map<String, dynamic>> undo(String id) async {
+    return _request('POST', '/api/games/$id/undo');
+  }
+
+  /// Resets the board (keeps the same map).
+  static Future<Map<String, dynamic>> reset(String id) async {
+    return _request('POST', '/api/games/$id/reset');
+  }
+
+  /// Places a hint queen.
+  static Future<Map<String, dynamic>> hint(String id) async {
+    return _request('POST', '/api/games/$id/hint');
+  }
+
+  /// Toggles auto-cross mode.
+  static Future<Map<String, dynamic>> setAutoCross(
+      String id, bool enabled) async {
+    return _request('PUT', '/api/games/$id/settings/auto-cross',
+        body: {'enabled': enabled});
+  }
+
+  /// Top 10 scoreboard for a given size.
+  static Future<Map<String, dynamic>> getRecords(int size) async {
+    return _request('GET', '/api/scoreboard?size=$size');
+  }
+
+  /// Game rules.
+  static Future<Map<String, dynamic>> getRules() async {
+    return _request('GET', '/api/rules');
+  }
 }
+

@@ -1,735 +1,635 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
-
+import 'package:flutter/services.dart';
 import 'services/api_service.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   runApp(const QueensApp());
 }
 
+// ─────────────────────────────────────────────────────────────────
+// THEME & COLORS
+// ─────────────────────────────────────────────────────────────────
+const _bg       = Color(0xFF0F172A);
+const _surface  = Color(0xFF1E293B);
+const _accent   = Color(0xFF38BDF8);
+const _textP    = Colors.white;
+const _textS    = Color(0xFF94A3B8);
+const _errC     = Color(0xFFFC8181);
+const _winC     = Color(0xFF6EE7B7);
+
+const List<Color> _palette = [
+  Color(0xFFA7F3D0), Color(0xFFFDE68A), Color(0xFFBAE6FD),
+  Color(0xFFDDD6FE), Color(0xFFFBCFE8), Color(0xFFFED7AA),
+  Color(0xFFC7D2FE), Color(0xFFE2E8F0), Color(0xFFD9F99D),
+  Color(0xFFFCA5A5), Color(0xFF99F6E4), Color(0xFFF5D0FE),
+];
+Color _rc(int r) => _palette[r % _palette.length];
+
+// ─────────────────────────────────────────────────────────────────
+// APP ROOT
+// ─────────────────────────────────────────────────────────────────
 class QueensApp extends StatelessWidget {
   const QueensApp({super.key});
-
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Queens',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF38BDF8),
-          brightness: Brightness.dark,
-        ),
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0F172A),
-          foregroundColor: Color(0xFFF8FAFC),
-          centerTitle: false,
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Queens',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      colorScheme: ColorScheme.dark(primary: _accent, surface: _surface, error: _errC),
+      scaffoldBackgroundColor: _bg,
+      useMaterial3: true,
+    ),
+    home: const SizePickerScreen(),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SIZE PICKER
+// ─────────────────────────────────────────────────────────────────
+class SizePickerScreen extends StatelessWidget {
+  const SizePickerScreen({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: _bg,
+    body: SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.workspace_premium_rounded, color: _accent, size: 72),
+              const SizedBox(height: 16),
+              const Text('Queens', style: TextStyle(color: _textP, fontSize: 40, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text(
+                'Coloca una corona en cada fila, columna y región.\nNinguna puede tocar a otra.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _textS, fontSize: 14),
+              ),
+              const SizedBox(height: 48),
+              const Text('ELIGE TAMAÑO', style: TextStyle(color: _textS, fontSize: 12, letterSpacing: 1.5)),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12, runSpacing: 12, alignment: WrapAlignment.center,
+                children: List.generate(9, (i) => _SizeBtn(size: i + 4)),
+              ),
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(12)),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Controles', style: TextStyle(color: _accent, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    _HintRow(icon: Icons.touch_app, text: 'Toque → Cruz (marcar descartada)'),
+                    _HintRow(icon: Icons.swipe, text: 'Arrastra → Cruces en todas las casillas'),
+                    _HintRow(icon: Icons.ads_click, text: 'Doble toque → Corona (reina)'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
-      home: const GameScreen(),
-    );
-  }
+    ),
+  );
 }
 
-class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+class _HintRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _HintRow({required this.icon, required this.text});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      children: [
+        Icon(icon, color: _textS, size: 16),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text, style: const TextStyle(color: _textS, fontSize: 13))),
+      ],
+    ),
+  );
+}
 
+class _SizeBtn extends StatelessWidget {
+  final int size;
+  const _SizeBtn({required this.size});
+  @override
+  Widget build(BuildContext context) => ElevatedButton(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: _surface, foregroundColor: _accent,
+      minimumSize: const Size(76, 50),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      side: const BorderSide(color: Color(0xFF334155)),
+    ),
+    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GameScreen(boardSize: size))),
+    child: Text('${size}×$size', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// GAME SCREEN
+// ─────────────────────────────────────────────────────────────────
+class GameScreen extends StatefulWidget {
+  final int boardSize;
+  const GameScreen({super.key, required this.boardSize});
   @override
   State<GameScreen> createState() => _GameScreenState();
 }
 
 class _GameScreenState extends State<GameScreen> {
-  static const _regionColors = <Color>[
-    Color(0xFFA7F3D0),
-    Color(0xFFFDE68A),
-    Color(0xFFBAE6FD),
-    Color(0xFFDDD6FE),
-    Color(0xFFFBCFE8),
-    Color(0xFFFED7AA),
-    Color(0xFFC7D2FE),
-    Color(0xFFE2E8F0),
-    Color(0xFFD9F99D),
-    Color(0xFFFCA5A5),
-    Color(0xFF99F6E4),
-    Color(0xFFF5D0FE),
-  ];
-
-  final ApiService _api = ApiService();
   Map<String, dynamic>? _game;
-  int _size = 8;
-  int _elapsedSeconds = 0;
-  bool _loading = false;
-  bool _crossMode = false;
-  String? _loadError;
-  Timer? _clock;
+  bool _loading = true;
+  String?  _error;
+  bool _autoCross = true;
+
+  Timer? _ticker;
+  int _elapsed = 0;
+
+  // ── Touch interaction state ──────────────────────────────────
+  /// Tracks if the current gesture started as a drag (pan)
+  bool _isPan = false;
+  /// Cells already crossed in the current drag gesture (avoid double-calls)
+  final Set<String> _pannedCells = {};
+  /// For double-tap detection: time and coords of last tap
+  DateTime? _lastTapTime;
+  int? _lastTapRow;
+  int? _lastTapCol;
+  static const _doubleTapWindow = Duration(milliseconds: 350);
 
   @override
   void initState() {
     super.initState();
-    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && _game?['timer_running'] == true) {
-        setState(() => _elapsedSeconds++);
-      }
-    });
     _newGame();
   }
 
   @override
   void dispose() {
-    _clock?.cancel();
-    _api.close();
+    _ticker?.cancel();
     super.dispose();
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // GAME ACTIONS
+  // ─────────────────────────────────────────────────────────────
   Future<void> _newGame() async {
-    await _perform(() async {
-      final game = await _api.createGame(_size, _game?['auto_cross'] ?? true);
-      _applyGame(game);
-      _crossMode = false;
-    });
-  }
-
-  void _applyGame(Map<String, dynamic> game) {
-    if (!mounted) return;
-    setState(() {
-      _game = game;
-      _size = game['size'] as int;
-      _elapsedSeconds = game['elapsed_seconds'] as int;
-      _loadError = null;
-    });
-  }
-
-  Future<void> _perform(Future<void> Function() action) async {
-    if (_loading) return;
-    setState(() => _loading = true);
+    _ticker?.cancel();
+    setState(() { _loading = true; _error = null; _game = null; _elapsed = 0; });
     try {
-      await action();
-    } on ApiException catch (error) {
-      if (mounted) {
-        setState(() => _loadError = error.message);
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text(error.message)));
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      _apply(await ApiService.createGame(widget.boardSize));
+    } catch (e) {
+      setState(() { _error = e.toString(); _loading = false; });
     }
   }
 
-  Future<void> _tapCell(int row, int col) async {
-    final game = _game;
-    if (game == null || game['is_won'] == true) return;
-    await _perform(() async {
-      final updated = await _api.updateCell(
-        game['game_id'] as String,
-        row,
-        col,
-        _crossMode ? 'cross' : 'queen',
-      );
-      _applyGame(updated);
-    });
+  void _apply(Map<String, dynamic> g) {
+    _ticker?.cancel();
+    final won = g['is_won'] == true;
+    _elapsed = (g['elapsed_seconds'] as num?)?.toInt() ?? 0;
+    if (!won) {
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() => _elapsed++);
+      });
+    }
+    setState(() { _game = g; _loading = false; _error = null; });
+    if (won) _winDialog(g);
   }
 
-  Future<void> _undo() async {
-    final game = _game;
-    if (game == null) return;
-    await _perform(() async {
-      _applyGame(await _api.undo(game['game_id'] as String));
-    });
+  Future<void> _cell(int row, int col, String action) async {
+    if (_game == null || _game!['is_won'] == true) return;
+    try { _apply(await ApiService.updateCell(_game!['game_id'], row, col, action)); }
+    catch (e) { _snack(e.toString()); }
   }
 
-  Future<void> _reset() async {
-    final game = _game;
-    if (game == null) return;
-    await _perform(() async {
-      _applyGame(await _api.reset(game['game_id'] as String));
-    });
+  Future<void> _undo()  async { try { _apply(await ApiService.undo(_game!['game_id']));  } catch (e) { _snack(e.toString()); } }
+  Future<void> _reset() async { try { _apply(await ApiService.reset(_game!['game_id'])); } catch (e) { _snack(e.toString()); } }
+  Future<void> _hint()  async { try { _apply(await ApiService.hint(_game!['game_id']));  } catch (e) { _snack(e.toString()); } }
+
+  Future<void> _toggleAuto() async {
+    if (_game == null) return;
+    final next = !_autoCross;
+    try {
+      _apply(await ApiService.setAutoCross(_game!['game_id'], next));
+      setState(() => _autoCross = next);
+    } catch (e) { _snack(e.toString()); }
   }
 
-  Future<void> _hint() async {
-    final game = _game;
-    if (game == null) return;
-    await _perform(() async {
-      final response = await _api.hint(game['game_id'] as String);
-      _applyGame(response['game'] as Map<String, dynamic>);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(response['message'] as String)),
-        );
-      }
-    });
+  // ─────────────────────────────────────────────────────────────
+  // TOUCH LOGIC
+  // ─────────────────────────────────────────────────────────────
+
+  /// Single-tap: toggle cross (0→cross, cross→empty, queen→cross)
+  void _onSingleTap(int row, int col) {
+    final board = _boardData;
+    final cur = board[row][col];
+    final action = cur == 2 ? 'empty' : 'cross';
+    _cell(row, col, action);
   }
 
-  Future<void> _setAutoCross(bool enabled) async {
-    final game = _game;
-    if (game == null) return;
-    await _perform(() async {
-      _applyGame(
-        await _api.setAutoCross(game['game_id'] as String, enabled),
-      );
-    });
+  /// Double-tap: place queen
+  void _onDoubleTap(int row, int col) {
+    _cell(row, col, 'queen');
   }
 
-  String _formatTime(int seconds) {
-    final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
-    final remaining = (seconds % 60).toString().padLeft(2, '0');
-    return '$minutes:$remaining';
+  /// The whole board is wrapped in a single GestureDetector.
+  /// We translate (dx,dy) → (row,col) from the board's top-left.
+  void _onPanStart(Offset local, double cellSize) {
+    _isPan = false;
+    _pannedCells.clear();
+    final (row, col) = _pos2cell(local, cellSize);
+    if (row < 0) return;
+    _isPan = true;
+    final k = '$row,$col';
+    _pannedCells.add(k);
+    // Don't cross on pan-start — wait for a second cell to confirm it's a drag
   }
 
-  Future<void> _openLegalPage(String path) async {
-    final opened = await launchUrl(
-      Uri.base.resolve(path),
-      webOnlyWindowName: '_blank',
-    );
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir el documento legal.')),
-      );
+  void _onPanUpdate(Offset local, double cellSize) {
+    if (!_isPan) return;
+    final (row, col) = _pos2cell(local, cellSize);
+    if (row < 0) return;
+    final k = '$row,$col';
+    if (!_pannedCells.contains(k)) {
+      _pannedCells.add(k);
+      _cell(row, col, 'cross');
     }
   }
 
-  Color _regionColor(int region) =>
-      _regionColors[region % _regionColors.length];
-
-  Set<String> _errorCellKeys() {
-    final validation = _game?['validation'] as Map<String, dynamic>?;
-    final cells = validation?['error_cells'] as List<dynamic>? ?? const [];
-    return cells.map((cell) => '${cell[0]},${cell[1]}').toSet();
+  void _onPanEnd() {
+    // If only 1 cell panned → it was actually a tap, handled by onTap
+    _isPan = false;
+    _pannedCells.clear();
   }
 
-  Future<void> _showRecords() async {
-    final size = _size;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-          child: FutureBuilder<List<dynamic>>(
-            future: _api.getRecords(size),
-            builder: (context, snapshot) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Récords · ${size}×$size',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 14),
-                  if (snapshot.connectionState == ConnectionState.waiting)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
-                  else if (snapshot.hasError)
-                    Text('No se pudieron cargar los récords: ${snapshot.error}')
-                  else if (snapshot.data!.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Text('Aún no hay partidas registradas.'),
-                    )
-                  else
-                    ...snapshot.data!.asMap().entries.map((entry) {
-                      final record = entry.value as Map<String, dynamic>;
+  (int, int) _pos2cell(Offset local, double cs) {
+    final n = widget.boardSize;
+    final col = (local.dx / cs).floor();
+    final row = (local.dy / cs).floor();
+    if (row < 0 || row >= n || col < 0 || col >= n) return (-1, -1);
+    return (row, col);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // HELPERS
+  // ─────────────────────────────────────────────────────────────
+  List<List<int>> get _boardData {
+    final raw = _game!['board'] as List;
+    return raw.map((r) => (r as List).map((c) => c as int).toList()).toList();
+  }
+
+  List<List<int>> get _regData {
+    final raw = _game!['regions'] as List;
+    return raw.map((r) => (r as List).map((c) => c as int).toList()).toList();
+  }
+
+  Set<String> get _errSet {
+    final v = _game?['validation'];
+    if (v == null) return {};
+    final cells = v['error_cells'];
+    if (cells == null) return {};
+    return {for (final c in cells as List) '${c[0]},${c[1]}'};
+  }
+
+  String _fmt(int s) {
+    final m = s ~/ 60, sec = s % 60;
+    return '${m.toString().padLeft(2,'0')}:${sec.toString().padLeft(2,'0')}';
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg), backgroundColor: _errC,
+      behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 3),
+    ));
+  }
+
+  void _winDialog(Map<String, dynamic> g) {
+    if (!mounted) return;
+    final rank  = g['rank_position'];
+    final moves = g['move_count'] ?? 0;
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      showDialog(
+        context: context, barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          backgroundColor: _surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(children: [
+            Icon(Icons.workspace_premium_rounded, color: _accent, size: 28),
+            SizedBox(width: 8),
+            Text('¡Completado!', style: TextStyle(color: _textP, fontSize: 20)),
+          ]),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _WR('Tiempo', _fmt(_elapsed)),
+            _WR('Movimientos', moves.toString()),
+            if (rank != null) _WR('Posición', '#$rank'),
+          ]),
+          actions: [
+            TextButton(onPressed: () { Navigator.pop(context); Navigator.pop(context); },
+              child: const Text('Menú', style: TextStyle(color: _textS))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: _accent),
+              onPressed: () { Navigator.pop(context); _newGame(); },
+              child: const Text('Nuevo juego', style: TextStyle(color: Colors.black))),
+          ],
+        ),
+      );
+    });
+  }
+
+  void _showRecords() async {
+    showDialog(context: context, builder: (_) => const _Busy('Cargando récords…'));
+    try {
+      final data = await ApiService.getRecords(widget.boardSize);
+      if (!mounted) return;
+      Navigator.pop(context);
+      final records = (data['records'] as List?) ?? [];
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: _surface,
+          title: Text('Top 10 — ${widget.boardSize}×${widget.boardSize}',
+              style: const TextStyle(color: _textP)),
+          content: records.isEmpty
+              ? const Text('Sin récords aún.', style: TextStyle(color: _textS))
+              : SizedBox(width: double.maxFinite,
+                  child: ListView.separated(
+                    shrinkWrap: true, itemCount: records.length,
+                    separatorBuilder: (_, __) => const Divider(color: Color(0xFF334155)),
+                    itemBuilder: (_, i) {
+                      final r = records[i] as Map;
                       return ListTile(
-                        contentPadding: EdgeInsets.zero,
                         leading: CircleAvatar(
-                          backgroundColor: const Color(0xFF334155),
-                          child: Text('${entry.key + 1}'),
+                          backgroundColor: _accent.withAlpha(40),
+                          child: Text('${i+1}', style: const TextStyle(color: _accent, fontWeight: FontWeight.bold)),
                         ),
-                        title: Text(record['time_formatted'] as String),
-                        subtitle: Text(
-                          '${record['moves']} movimientos · ${record['date']}',
-                        ),
+                        title:    Text(r['time_formatted']?.toString() ?? '-', style: const TextStyle(color: _textP)),
+                        subtitle: Text('${r['moves']} movimientos',            style: const TextStyle(color: _textS)),
                       );
-                    }),
-                ],
-              );
-            },
-          ),
+                    },
+                  )),
+          actions: [TextButton(onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar', style: TextStyle(color: _accent)))],
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (mounted) { Navigator.pop(context); _snack(e.toString()); }
+    }
   }
 
-  Future<void> _showRules() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1E293B),
-      builder: (context) => SafeArea(
-        child: FutureBuilder<Map<String, dynamic>>(
-          future: _api.getRules(),
-          builder: (context, snapshot) {
-            final rules = snapshot.data;
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(24, 18, 24, 30),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Reglas del juego',
-                      style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 12),
-                  if (snapshot.connectionState == ConnectionState.waiting)
-                    const Center(child: CircularProgressIndicator())
-                  else if (snapshot.hasError)
-                    Text('No se pudieron cargar las reglas: ${snapshot.error}')
-                  else ...[
-                    Text(rules!['objective'] as String),
-                    const SizedBox(height: 10),
-                    ...(rules['constraints'] as List<dynamic>).map(
-                      (rule) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text('• $rule'),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Toca para colocar una reina. Cambia a modo Cruz para '
-                      'marcar casillas. Las pistas colocan una reina de una '
-                      'solución válida.',
-                    ),
-                  ],
-                ],
+  void _showRules() async {
+    showDialog(context: context, builder: (_) => const _Busy('Cargando reglas…'));
+    try {
+      final data = await ApiService.getRules();
+      if (!mounted) return;
+      Navigator.pop(context);
+      final rules = (data['rules'] as List?) ?? [];
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: _surface,
+          title: const Text('Reglas', style: TextStyle(color: _textP)),
+          content: SizedBox(width: double.maxFinite,
+            child: ListView.builder(shrinkWrap: true, itemCount: rules.length,
+              itemBuilder: (_, i) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('• ', style: TextStyle(color: _accent, fontSize: 16)),
+                  Expanded(child: Text(rules[i].toString(), style: const TextStyle(color: _textP, fontSize: 14))),
+                ]),
               ),
-            );
-          },
+            )),
+          actions: [TextButton(onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar', style: TextStyle(color: _accent)))],
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (mounted) { Navigator.pop(context); _snack(e.toString()); }
+    }
   }
 
-  Widget _buildBoard(Map<String, dynamic> game) {
-    final size = game['size'] as int;
-    final regions = game['regions'] as List<dynamic>;
-    final board = game['board'] as List<dynamic>;
-    final errorKeys = _errorCellKeys();
+  // ─────────────────────────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: _bg,
+    appBar: AppBar(
+      backgroundColor: _surface,
+      title: Text('${widget.boardSize}×${widget.boardSize} Queens',
+          style: const TextStyle(color: _textP, fontWeight: FontWeight.bold)),
+      iconTheme: const IconThemeData(color: _textS),
+      actions: [
+        IconButton(icon: const Icon(Icons.emoji_events_outlined), tooltip: 'Récords', onPressed: _showRecords),
+        IconButton(icon: const Icon(Icons.help_outline_rounded),  tooltip: 'Reglas',  onPressed: _showRules),
+      ],
+    ),
+    body: _loading ? const Center(child: CircularProgressIndicator(color: _accent))
+        : _error != null ? _ErrView(error: _error!, onRetry: _newGame)
+        : _buildGame(),
+  );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final dimension = constraints.maxWidth;
-        return Center(
-          child: SizedBox.square(
-            dimension: dimension,
+  Widget _buildGame() {
+    final won = _game!['is_won'] == true;
+    return Column(children: [
+      _statusBar(won),
+      Expanded(child: Padding(padding: const EdgeInsets.all(10), child: _buildBoard())),
+      _controls(won),
+      const SizedBox(height: 6),
+    ]);
+  }
+
+  Widget _statusBar(bool won) => Container(
+    color: _surface,
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Row(children: [
+        const Icon(Icons.timer_outlined, color: _textS, size: 18),
+        const SizedBox(width: 6),
+        Text(_fmt(_elapsed), style: TextStyle(
+          color: won ? _winC : _textP, fontSize: 20, fontWeight: FontWeight.bold,
+          fontFeatures: const [FontFeature.tabularFigures()])),
+      ]),
+      Row(children: [
+        const Text('Auto-X', style: TextStyle(color: _textS, fontSize: 13)),
+        const SizedBox(width: 4),
+        Switch(value: _autoCross, onChanged: (_) => _toggleAuto(),
+            activeColor: _accent, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      ]),
+    ]),
+  );
+
+  Widget _buildBoard() {
+    final n    = widget.boardSize;
+    final board = _boardData;
+    final regs  = _regData;
+    final errs  = _errSet;
+
+    return AspectRatio(
+      aspectRatio: 1,
+      child: LayoutBuilder(builder: (ctx, box) {
+        final cs = box.maxWidth / n;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          // ── Drag: crosses on all visited cells ───────────────
+          onPanStart:  (d) => _onPanStart(d.localPosition, cs),
+          onPanUpdate: (d) => _onPanUpdate(d.localPosition, cs),
+          onPanEnd:    (_) => _onPanEnd(),
+          // ── Tap & DoubleTap ──────────────────────────────────
+          onTapUp: (d) {
+            final (row, col) = _pos2cell(d.localPosition, cs);
+            if (row < 0) return;
+            final now = DateTime.now();
+            if (_lastTapTime != null &&
+                now.difference(_lastTapTime!) < _doubleTapWindow &&
+                _lastTapRow == row && _lastTapCol == col) {
+              // Double tap detected
+              _lastTapTime = null;
+              _onDoubleTap(row, col);
+            } else {
+              _lastTapTime = now;
+              _lastTapRow  = row;
+              _lastTapCol  = col;
+              // Delay single-tap to give double-tap a chance to cancel it
+              Future.delayed(_doubleTapWindow, () {
+                if (_lastTapTime == now) {
+                  _onSingleTap(row, col);
+                }
+              });
+            }
+          },
+          child: SizedBox(
+            width:  cs * n,
+            height: cs * n,
             child: GridView.builder(
               physics: const NeverScrollableScrollPhysics(),
-              padding: EdgeInsets.zero,
-              itemCount: size * size,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: size,
-              ),
-              itemBuilder: (context, index) {
-                final row = index ~/ size;
-                final col = index % size;
-                final region = regions[row][col] as int;
-                final state = board[row][col] as int;
-                final regionRow = regions[row] as List<dynamic>;
-                final bool top = row == 0 || regions[row - 1][col] != region;
-                final bool bottom =
-                    row == size - 1 || regions[row + 1][col] != region;
-                final bool left = col == 0 || regionRow[col - 1] != region;
-                final bool right =
-                    col == size - 1 || regionRow[col + 1] != region;
-                final isError = errorKeys.contains('$row,$col');
-                final borderColor =
-                    const Color(0xFF0F172A).withOpacity(0.78);
-                return Semantics(
-                  button: true,
-                  label: 'Fila ${row + 1}, columna ${col + 1}',
-                  child: InkWell(
-                    onTap: _loading ? null : () => _tapCell(row, col),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isError ? const Color(0xFFFCA5A5) : _regionColor(region),
-                        border: Border(
-                          top: BorderSide(
-                            color: borderColor,
-                            width: top ? 2.2 : 0.5,
-                          ),
-                          bottom: BorderSide(
-                            color: borderColor,
-                            width: bottom ? 2.2 : 0.5,
-                          ),
-                          left: BorderSide(
-                            color: borderColor,
-                            width: left ? 2.2 : 0.5,
-                          ),
-                          right: BorderSide(
-                            color: borderColor,
-                            width: right ? 2.2 : 0.5,
-                          ),
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: state == 1
-                          ? Icon(
-                              Icons.workspace_premium_rounded,
-                              color: isError
-                                  ? const Color(0xFFB91C1C)
-                                  : const Color(0xFFB45309),
-                              size: dimension / size * 0.68,
-                            )
-                          : state == 2
-                              ? Icon(
-                                  Icons.close_rounded,
-                                  color: const Color(0xFF334155),
-                                  size: dimension / size * 0.48,
-                                )
-                              : null,
-                    ),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: n),
+              itemCount: n * n,
+              itemBuilder: (_, idx) {
+                final row = idx ~/ n, col = idx % n;
+                final state  = board[row][col];
+                final region = regs[row][col];
+                final err    = errs.contains('$row,$col');
+                final base   = _rc(region);
+                final cellColor = err ? Color.lerp(base, _errC, 0.45)! : base;
+                return Container(
+                  decoration: BoxDecoration(
+                    color: cellColor,
+                    border: Border.all(color: Colors.black.withAlpha(55), width: 0.5),
+                    boxShadow: err ? [BoxShadow(color: _errC.withAlpha(90), blurRadius: 4)] : null,
                   ),
+                  child: Center(child: _icon(state, cs)),
                 );
               },
             ),
           ),
         );
-      },
+      }),
     );
   }
 
+  Widget? _icon(int state, double cs) {
+    final s = cs * 0.54;
+    if (state == 1) return Icon(Icons.workspace_premium_rounded, color: const Color(0xFF1E293B), size: s);
+    if (state == 2) return Icon(Icons.close_rounded,             color: const Color(0xFF64748B), size: s * 0.82);
+    return null;
+  }
+
+  Widget _controls(bool won) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+      _Btn(Icons.undo_rounded,           'Deshacer', won ? null : _undo),
+      _Btn(Icons.refresh_rounded,        'Reiniciar', won ? null : _reset),
+      _Btn(Icons.lightbulb_outline_rounded, 'Pista',  won ? null : _hint),
+      _Btn(Icons.add_circle_outline_rounded, 'Nuevo', _newGame, color: _accent),
+    ]),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SMALL WIDGETS
+// ─────────────────────────────────────────────────────────────────
+class _WR extends StatelessWidget {
+  final String label, value;
+  const _WR(this.label, this.value);
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(children: [
+      Text('$label: ', style: const TextStyle(color: _textS, fontSize: 15)),
+      Text(value, style: const TextStyle(color: _winC, fontSize: 15, fontWeight: FontWeight.bold)),
+    ]),
+  );
+}
+
+class _Btn extends StatelessWidget {
+  final IconData icon; final String label;
+  final VoidCallback? onPressed; final Color? color;
+  const _Btn(this.icon, this.label, this.onPressed, {this.color});
   @override
   Widget build(BuildContext context) {
-    final game = _game;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Row(
-          children: [
-            Icon(Icons.workspace_premium_rounded, color: Color(0xFFFBBF24)),
-            SizedBox(width: 8),
-            Text('QUEENS', style: TextStyle(fontWeight: FontWeight.w800)),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Récords',
-            onPressed: _showRecords,
-            icon: const Icon(Icons.emoji_events_outlined),
-          ),
-          IconButton(
-            tooltip: 'Reglas',
-            onPressed: _showRules,
-            icon: const Icon(Icons.help_outline_rounded),
-          ),
-        ],
+    final c = color ?? _textS;
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: c,
+        disabledForegroundColor: c.withAlpha(60),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       ),
-      body: game == null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_loading)
-                      const CircularProgressIndicator()
-                    else
-                      const Icon(
-                        Icons.cloud_off_rounded,
-                        color: Color(0xFFF87171),
-                        size: 40,
-                      ),
-                    const SizedBox(height: 16),
-                    Text(
-                      _loadError ?? 'Conectando con el servidor…',
-                      textAlign: TextAlign.center,
-                    ),
-                    if (!_loading) ...[
-                      const SizedBox(height: 12),
-                      FilledButton.icon(
-                        onPressed: _newGame,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Reintentar'),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            )
-          : SafeArea(
-              top: false,
-              child: Stack(
-                children: [
-                  ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Un reto de lógica',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(color: const Color(0xFF94A3B8)),
-                            ),
-                          ),
-                          DropdownButton<int>(
-                            value: _size,
-                            dropdownColor: const Color(0xFF1E293B),
-                            underline: const SizedBox.shrink(),
-                            items: List.generate(
-                              9,
-                              (index) => DropdownMenuItem(
-                                value: index + 4,
-                                child: Text('${index + 4}×${index + 4}'),
-                              ),
-                            ),
-                            onChanged: _loading
-                                ? null
-                                : (value) {
-                                    if (value != null) {
-                                      setState(() => _size = value);
-                                      _newGame();
-                                    }
-                                  },
-                          ),
-                          IconButton(
-                            tooltip: 'Nuevo mapa',
-                            onPressed: _loading ? null : _newGame,
-                            icon: const Icon(Icons.casino_outlined),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _StatCard(
-                              icon: Icons.workspace_premium_rounded,
-                              label: 'REINAS',
-                              value: '${game['queen_count']} / $_size',
-                              color: const Color(0xFFFBBF24),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _StatCard(
-                              icon: Icons.timer_outlined,
-                              label: 'TIEMPO',
-                              value: _formatTime(_elapsedSeconds),
-                              color: const Color(0xFF38BDF8),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Center(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 560),
-                              child: AspectRatio(
-                                aspectRatio: 1,
-                                child: _buildBoard(game),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          const Expanded(
-                            child: Text('Modo de juego',
-                                style: TextStyle(
-                                    color: Color(0xFFCBD5E1),
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                          Switch.adaptive(
-                            value: game['auto_cross'] as bool,
-                            onChanged: _loading ? null : _setAutoCross,
-                          ),
-                          const Text('Auto-cruces',
-                              style: TextStyle(color: Color(0xFF94A3B8))),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      SegmentedButton<bool>(
-                        segments: const [
-                          ButtonSegment(
-                            value: false,
-                            icon: Icon(Icons.workspace_premium_outlined),
-                            label: Text('Reina'),
-                          ),
-                          ButtonSegment(
-                            value: true,
-                            icon: Icon(Icons.close_rounded),
-                            label: Text('Cruces'),
-                          ),
-                        ],
-                        selected: {_crossMode},
-                        onSelectionChanged: _loading
-                            ? null
-                            : (selection) =>
-                                setState(() => _crossMode = selection.first),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _loading ? null : _reset,
-                              icon: const Icon(Icons.restart_alt_rounded),
-                              label: const Text('Reiniciar'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _loading ? null : _undo,
-                              icon: const Icon(Icons.undo_rounded),
-                              label: const Text('Deshacer'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      FilledButton.icon(
-                        onPressed: _loading || game['is_won'] == true
-                            ? null
-                            : _hint,
-                        icon: const Icon(Icons.lightbulb_outline_rounded),
-                        label: const Text('Dame una pista'),
-                      ),
-                      const SizedBox(height: 12),
-                      if (game['is_won'] == true)
-                        Card(
-                          color: const Color(0xFF064E3B),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              children: [
-                                const Icon(Icons.celebration_rounded,
-                                    color: Color(0xFF6EE7B7), size: 32),
-                                const SizedBox(height: 8),
-                                Text(
-                                  game['last_message'] as String,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 10),
-                                TextButton(
-                                  onPressed: _newGame,
-                                  child: const Text('Siguiente partida'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      else
-                        Text(
-                          game['last_message'] as String,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Color(0xFF94A3B8)),
-                        ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Una reina por fila, columna y región. Las reinas no '
-                        'pueden tocarse, tampoco en diagonal.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_loading)
-                    const Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: LinearProgressIndicator(minHeight: 2),
-                    ),
-                ],
-              ),
-            ),
-      bottomNavigationBar: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Divider(height: 1, color: Color(0xFF334155)),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              children: [
-                TextButton(
-                  onPressed: () => _openLegalPage('terms.html'),
-                  child: const Text('Condiciones del servicio'),
-                ),
-                TextButton(
-                  onPressed: () => _openLegalPage('privacy.html'),
-                  child: const Text('Política de privacidad'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 22),
+        const SizedBox(height: 2),
+        Text(label, style: const TextStyle(fontSize: 11)),
+      ]),
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
+class _Busy extends StatelessWidget {
+  final String message;
+  const _Busy(this.message);
   @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Color(0xFF94A3B8),
-                    fontSize: 10,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(value,
-                    style: const TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w700)),
-              ],
-            ),
-          ],
+  Widget build(BuildContext context) => AlertDialog(
+    backgroundColor: _surface,
+    content: Row(children: [
+      const CircularProgressIndicator(color: _accent),
+      const SizedBox(width: 16),
+      Text(message, style: const TextStyle(color: _textP)),
+    ]),
+  );
+}
+
+class _ErrView extends StatelessWidget {
+  final String error; final VoidCallback onRetry;
+  const _ErrView({required this.error, required this.onRetry});
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(padding: const EdgeInsets.all(32),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Icon(Icons.cloud_off_rounded, color: _errC, size: 56),
+        const SizedBox(height: 16),
+        const Text('No se pudo conectar con el servidor',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _textP, fontSize: 16)),
+        const SizedBox(height: 8),
+        Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _textS, fontSize: 13)),
+        const SizedBox(height: 24),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(backgroundColor: _accent),
+          icon: const Icon(Icons.refresh_rounded, color: Colors.black),
+          label: const Text('Reintentar', style: TextStyle(color: Colors.black)),
+          onPressed: onRetry,
         ),
-      ),
-    );
-  }
+      ]),
+    ),
+  );
 }
