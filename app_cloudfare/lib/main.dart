@@ -155,6 +155,22 @@ class _SizeBtn extends StatelessWidget {
   );
 }
 
+class _PendingCellAction {
+  final String gameId;
+  final int row;
+  final int col;
+  final String action;
+  final int? dragStrokeId;
+
+  const _PendingCellAction({
+    required this.gameId,
+    required this.row,
+    required this.col,
+    required this.action,
+    this.dragStrokeId,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────
 // GAME SCREEN
 // ─────────────────────────────────────────────────────────────────
@@ -167,6 +183,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   Map<String, dynamic>? _game;
+  Map<String, dynamic>? _confirmedGame;
   bool _loading = true;
   String?  _error;
   bool _autoCross = true;
@@ -175,18 +192,19 @@ class _GameScreenState extends State<GameScreen> {
   int _elapsed = 0;
 
   // ── Touch interaction state ──────────────────────────────────
-  /// Tracks if the current gesture started as a drag (pan)
   bool _isPan = false;
-  /// Erase crosses only when the drag starts on a crossed cell.
   bool _eraseCrosses = false;
   int _dragStrokeId = 0;
+  int? _lastPanRow;
+  int? _lastPanCol;
   int? _undoStrokeId;
   int _undoMoveCount = 1;
   bool _undoing = false;
-  Future<void> _dragOperations = Future<void>.value();
-  /// Cells already crossed in the current drag gesture (avoid double-calls)
+  Future<void> _gameOperations = Future<void>.value();
   final Set<String> _pannedCells = {};
-  /// For double-tap detection: time and coords of last tap
+  final List<_PendingCellAction> _pendingCellActions = [];
+  _PendingCellAction? _pendingTap;
+  Timer? _pendingTapTimer;
   DateTime? _lastTapTime;
   int? _lastTapRow;
   int? _lastTapCol;
@@ -201,6 +219,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _pendingTapTimer?.cancel();
     super.dispose();
   }
 
@@ -208,7 +227,8 @@ class _GameScreenState extends State<GameScreen> {
   // GAME ACTIONS
   // ─────────────────────────────────────────────────────────────
   Future<void> _newGame() async {
-    await _dragOperations;
+    _flushPendingTap();
+    await _gameOperations;
     _ticker?.cancel();
     setState(() { _loading = true; _error = null; _game = null; _elapsed = 0; });
     try {
@@ -221,49 +241,158 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _apply(Map<String, dynamic> g) {
-    _ticker?.cancel();
+    _confirmedGame = g;
     final won = g['is_won'] == true;
     _elapsed = (g['elapsed_seconds'] as num?)?.toInt() ?? 0;
-    if (!won) {
+    if (won) {
+      _ticker?.cancel();
+      _ticker = null;
+    } else if (_ticker == null || !_ticker!.isActive) {
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() => _elapsed++);
       });
     }
-    setState(() { _game = g; _loading = false; _error = null; });
+    setState(() {
+      _game = _withPendingCellActions(g);
+      _loading = false;
+      _error = null;
+    });
     if (won) _winDialog(g);
   }
 
-  Future<bool> _cell(int row, int col, String action, {int? dragStrokeId}) async {
-    if (dragStrokeId == null) await _dragOperations;
-    if ((_undoing && dragStrokeId == null) ||
-        _game == null ||
-        _game!['is_won'] == true) {
+  _PendingCellAction _stageCellAction(
+    int row,
+    int col,
+    String action, [
+    int? dragStrokeId,
+  ]) {
+    final pending = _PendingCellAction(
+      gameId: _game!['game_id'].toString(),
+      row: row,
+      col: col,
+      action: action,
+      dragStrokeId: dragStrokeId,
+    );
+    _pendingCellActions.add(pending);
+    _refreshOptimisticGame();
+    return pending;
+  }
+
+  Future<bool> _queueCellAction(_PendingCellAction pending) {
+    final operation = _gameOperations.then((_) => _sendCellAction(pending));
+    _gameOperations = operation.then<void>((_) {});
+    return operation;
+  }
+
+  Future<bool> _sendCellAction(_PendingCellAction pending) async {
+    if (_confirmedGame?['is_won'] == true ||
+        _confirmedGame?['game_id']?.toString() != pending.gameId) {
+      _pendingCellActions.remove(pending);
+      _refreshOptimisticGame();
       return false;
     }
+
     try {
-      _apply(await ApiService.updateCell(_game!['game_id'], row, col, action));
-      if (dragStrokeId == null) {
+      final response = await ApiService.updateCell(
+        pending.gameId,
+        pending.row,
+        pending.col,
+        pending.action,
+      );
+      _pendingCellActions.remove(pending);
+      if (!mounted || _game?['game_id']?.toString() != pending.gameId) {
+        return true;
+      }
+
+      _apply(response);
+      if (pending.dragStrokeId == null) {
         _undoMoveCount = 1;
         _undoStrokeId = null;
       } else {
-        if (_undoStrokeId != dragStrokeId) {
+        if (_undoStrokeId != pending.dragStrokeId) {
           _undoMoveCount = 0;
-          _undoStrokeId = dragStrokeId;
+          _undoStrokeId = pending.dragStrokeId;
         }
         _undoMoveCount++;
       }
       return true;
     } catch (e) {
-      _snack(e.toString());
+      _pendingCellActions.remove(pending);
+      if (mounted && _game?['game_id']?.toString() == pending.gameId) {
+        _refreshOptimisticGame();
+        _snack(e.toString());
+      }
       return false;
     }
   }
 
+  Map<String, dynamic> _withPendingCellActions(Map<String, dynamic> game) {
+    if (_pendingCellActions.isEmpty) return game;
+    final next = Map<String, dynamic>.from(game);
+    final board = (game['board'] as List)
+        .map((row) => (row as List).cast<int>().toList())
+        .toList();
+    final regions = game['regions'] as List;
+    final autoCross = game['auto_cross'] == true;
+    for (final pending in _pendingCellActions) {
+      if (pending.gameId != game['game_id'].toString()) continue;
+      if (pending.action == 'queen') {
+        if (board[pending.row][pending.col] == 1) {
+          board[pending.row][pending.col] = 0;
+        } else {
+          board[pending.row][pending.col] = 1;
+          if (autoCross) {
+            void crossIfEmpty(int row, int col) {
+              if (board[row][col] == 0) board[row][col] = 2;
+            }
+
+            for (var index = 0; index < board.length; index++) {
+              if (index != pending.col) crossIfEmpty(pending.row, index);
+              if (index != pending.row) crossIfEmpty(index, pending.col);
+            }
+            final region = regions[pending.row][pending.col];
+            for (var row = 0; row < board.length; row++) {
+              for (var col = 0; col < board.length; col++) {
+                if ((row != pending.row || col != pending.col) &&
+                    regions[row][col] == region) {
+                  crossIfEmpty(row, col);
+                }
+              }
+            }
+            for (var row = pending.row - 1; row <= pending.row + 1; row++) {
+              for (var col = pending.col - 1; col <= pending.col + 1; col++) {
+                if ((row != pending.row || col != pending.col) &&
+                    row >= 0 &&
+                    row < board.length &&
+                    col >= 0 &&
+                    col < board.length) {
+                  crossIfEmpty(row, col);
+                }
+              }
+            }
+          }
+        }
+      } else {
+        board[pending.row][pending.col] =
+            board[pending.row][pending.col] == 2 ? 0 : 2;
+      }
+    }
+    next['board'] = board;
+    return next;
+  }
+
+  void _refreshOptimisticGame() {
+    final confirmed = _confirmedGame;
+    if (!mounted || confirmed == null) return;
+    setState(() => _game = _withPendingCellActions(confirmed));
+  }
+
   Future<void> _undo() async {
     if (_game == null || _undoing) return;
+    _flushPendingTap();
     _undoing = true;
     try {
-      await _dragOperations;
+      await _gameOperations;
       final gameId = _game!['game_id'];
       while (_undoMoveCount > 0) {
         _apply(await ApiService.undo(gameId));
@@ -279,7 +408,8 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _reset() async {
-    await _dragOperations;
+    _flushPendingTap();
+    await _gameOperations;
     try {
       _apply(await ApiService.reset(_game!['game_id']));
       _undoMoveCount = 1;
@@ -288,7 +418,8 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _hint() async {
-    await _dragOperations;
+    _flushPendingTap();
+    await _gameOperations;
     try {
       _apply(await ApiService.hint(_game!['game_id']));
       _undoMoveCount = 1;
@@ -298,7 +429,8 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _toggleAuto() async {
     if (_game == null) return;
-    await _dragOperations;
+    _flushPendingTap();
+    await _gameOperations;
     final next = !_autoCross;
     try {
       _apply(await ApiService.setAutoCross(_game!['game_id'], next));
@@ -310,22 +442,53 @@ class _GameScreenState extends State<GameScreen> {
   // TOUCH LOGIC
   // ─────────────────────────────────────────────────────────────
 
-  /// Single-tap: toggle cross (0→cross, cross→empty, queen→cross)
-  void _onSingleTap(int row, int col) {
-    final board = _boardData;
-    final cur = board[row][col];
-    final action = cur == 2 ? 'empty' : 'cross';
-    _cell(row, col, action);
+  void _onTap(int row, int col) {
+    if (_undoing || _game == null || _game!['is_won'] == true) return;
+    final now = DateTime.now();
+    if (_pendingTap != null &&
+        _lastTapTime != null &&
+        now.difference(_lastTapTime!) < _doubleTapWindow &&
+        _lastTapRow == row &&
+        _lastTapCol == col) {
+      _pendingTapTimer?.cancel();
+      _pendingCellActions.remove(_pendingTap);
+      _pendingTap = null;
+      final queen = _stageCellAction(row, col, 'queen');
+      _queueCellAction(queen);
+    } else {
+      _flushPendingTap();
+      final current = _cellState(row, col);
+      final pending = _stageCellAction(
+        row,
+        col,
+        current == 2 ? 'empty' : 'cross',
+      );
+      _pendingTap = pending;
+      _pendingTapTimer = Timer(_doubleTapWindow, () {
+        if (_pendingTap != pending) return;
+        _pendingTap = null;
+        _pendingTapTimer = null;
+        _queueCellAction(pending);
+      });
+    }
+    _lastTapTime = now;
+    _lastTapRow = row;
+    _lastTapCol = col;
   }
 
-  /// Double-tap: place queen
-  void _onDoubleTap(int row, int col) {
-    _cell(row, col, 'queen');
+  void _flushPendingTap() {
+    final pending = _pendingTap;
+    if (pending == null) return;
+    _pendingTapTimer?.cancel();
+    _pendingTapTimer = null;
+    _pendingTap = null;
+    _queueCellAction(pending);
   }
 
   /// The whole board is wrapped in a single GestureDetector.
   /// We translate (dx,dy) → (row,col) from the board's top-left.
   void _onPanStart(Offset local, double cellSize) {
+    _flushPendingTap();
     if (_undoing) return;
     _isPan = false;
     _eraseCrosses = false;
@@ -334,37 +497,62 @@ class _GameScreenState extends State<GameScreen> {
     final (row, col) = _pos2cell(local, cellSize);
     if (row < 0) return;
     _isPan = true;
+    _lastPanRow = row;
+    _lastPanCol = col;
     final k = '$row,$col';
     _pannedCells.add(k);
-    _eraseCrosses = _boardData[row][col] == 2;
-    if (_eraseCrosses) _queueDragCell(row, col);
+    _eraseCrosses = _cellState(row, col) == 2;
+    _queueDragCell(row, col);
   }
 
   void _onPanUpdate(Offset local, double cellSize) {
     if (!_isPan) return;
     final (row, col) = _pos2cell(local, cellSize);
     if (row < 0) return;
-    final k = '$row,$col';
-    if (!_pannedCells.contains(k)) {
-      _pannedCells.add(k);
-      final isCrossed = _boardData[row][col] == 2;
-      if (_eraseCrosses ? isCrossed : !isCrossed) {
-        _queueDragCell(row, col);
+    final fromRow = _lastPanRow ?? row;
+    final fromCol = _lastPanCol ?? col;
+    final rowDistance = (row - fromRow).abs();
+    final colDistance = (col - fromCol).abs();
+    final rowStep = fromRow < row ? 1 : -1;
+    final colStep = fromCol < col ? 1 : -1;
+    var error = rowDistance - colDistance;
+    var currentRow = fromRow;
+    var currentCol = fromCol;
+
+    while (true) {
+      final key = '$currentRow,$currentCol';
+      if (_pannedCells.add(key)) {
+        final crossed = _cellState(currentRow, currentCol) == 2;
+        if (_eraseCrosses ? crossed : !crossed) {
+          _queueDragCell(currentRow, currentCol);
+        }
+      }
+      if (currentRow == row && currentCol == col) break;
+      final doubledError = error * 2;
+      if (doubledError > -colDistance) {
+        error -= colDistance;
+        currentRow += rowStep;
+      }
+      if (doubledError < rowDistance) {
+        error += rowDistance;
+        currentCol += colStep;
       }
     }
+    _lastPanRow = row;
+    _lastPanCol = col;
   }
 
   void _queueDragCell(int row, int col) {
-    final strokeId = _dragStrokeId;
-    _dragOperations = _dragOperations.then(
-      (_) => _cell(row, col, 'cross', dragStrokeId: strokeId).then((_) {}),
-    );
+    if (_undoing || _game == null || _game!['is_won'] == true) return;
+    final pending = _stageCellAction(row, col, 'cross', _dragStrokeId);
+    _queueCellAction(pending);
   }
 
   void _onPanEnd() {
-    // If only 1 cell panned → it was actually a tap, handled by onTap
     _isPan = false;
     _eraseCrosses = false;
+    _lastPanRow = null;
+    _lastPanCol = null;
     _pannedCells.clear();
   }
 
@@ -375,6 +563,9 @@ class _GameScreenState extends State<GameScreen> {
     if (row < 0 || row >= n || col < 0 || col >= n) return (-1, -1);
     return (row, col);
   }
+
+  int _cellState(int row, int col) =>
+      (_game!['board'] as List)[row][col] as int;
 
   // ─────────────────────────────────────────────────────────────
   // HELPERS
@@ -587,24 +778,7 @@ class _GameScreenState extends State<GameScreen> {
           onTapUp: (d) {
             final (row, col) = _pos2cell(d.localPosition, cs);
             if (row < 0) return;
-            final now = DateTime.now();
-            if (_lastTapTime != null &&
-                now.difference(_lastTapTime!) < _doubleTapWindow &&
-                _lastTapRow == row && _lastTapCol == col) {
-              // Double tap detected
-              _lastTapTime = null;
-              _onDoubleTap(row, col);
-            } else {
-              _lastTapTime = now;
-              _lastTapRow  = row;
-              _lastTapCol  = col;
-              // Delay single-tap to give double-tap a chance to cancel it
-              Future.delayed(_doubleTapWindow, () {
-                if (_lastTapTime == now) {
-                  _onSingleTap(row, col);
-                }
-              });
-            }
+            _onTap(row, col);
           },
           child: SizedBox(
             width:  cs * n,
