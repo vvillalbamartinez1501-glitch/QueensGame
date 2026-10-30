@@ -15,7 +15,7 @@ class ApiService {
 
   static String get _baseUrl {
     if (kIsWeb) return Uri.base.origin;
-    return 'https://queens-game.pages.dev';
+    return 'https://queensgame-2fk.pages.dev';
   }
 
   static Future<Map<String, dynamic>> _request(
@@ -46,11 +46,27 @@ class ApiService {
       throw ApiException('Network error: ${e.toString()}');
     }
 
-    final decoded = jsonDecode(response.body);
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return decoded as Map<String, dynamic>;
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      throw ApiException(
+        'El servidor devolvió una respuesta que no es JSON '
+        '(HTTP ${response.statusCode}).',
+        statusCode: response.statusCode,
+      );
     }
-    final detail = decoded is Map ? (decoded['detail'] ?? decoded['error'] ?? 'Unknown error') : 'Unknown error';
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (decoded is Map<String, dynamic>) return decoded;
+      throw ApiException(
+        'El servidor devolvió una respuesta JSON inesperada.',
+        statusCode: response.statusCode,
+      );
+    }
+    final detail = decoded is Map
+        ? (decoded['detail'] ?? decoded['error'] ?? 'Error desconocido')
+        : 'Error desconocido';
     throw ApiException(detail.toString(), statusCode: response.statusCode);
   }
 
@@ -104,4 +120,3 @@ class ApiService {
     return _request('GET', '/api/rules');
   }
 }
-

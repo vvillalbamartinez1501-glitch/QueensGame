@@ -22,6 +22,7 @@ const _textP    = Colors.white;
 const _textS    = Color(0xFF94A3B8);
 const _errC     = Color(0xFFFC8181);
 const _winC     = Color(0xFF6EE7B7);
+const _appVersion = '1.0.0';
 
 const List<Color> _palette = [
   Color(0xFFA7F3D0), Color(0xFFFDE68A), Color(0xFFBAE6FD),
@@ -98,6 +99,24 @@ class SizePickerScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    ),
+    bottomNavigationBar: const _VersionFooter(),
+  );
+}
+
+class _VersionFooter extends StatelessWidget {
+  const _VersionFooter();
+
+  @override
+  Widget build(BuildContext context) => const SafeArea(
+    top: false,
+    child: Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        'Versión $_appVersion',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: _textS, fontSize: 12),
       ),
     ),
   );
@@ -436,6 +455,7 @@ class _GameScreenState extends State<GameScreen> {
     body: _loading ? const Center(child: CircularProgressIndicator(color: _accent))
         : _error != null ? _ErrView(error: _error!, onRetry: _newGame)
         : _buildGame(),
+    bottomNavigationBar: const _VersionFooter(),
   );
 
   Widget _buildGame() {
