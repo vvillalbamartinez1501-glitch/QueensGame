@@ -49,7 +49,7 @@ dependencies:
 **Qué hace `lib/services/api_service.dart`:**
 
 - Clase `ApiService` que encapsula todas las llamadas HTTP al backend.
-- En web, la URL base se resuelve desde `Uri.base` para usar el mismo dominio. En Android se usa `https://queensgame-2fk.pages.dev`, que es el despliegue que publica las rutas `/api/...`.
+- La URL base se configura con `API_BASE_URL`; por defecto usa `https://queensgame-2fk.pages.dev` en web y Android. Así las versiones web de preview o publicadas bajo otro dominio siguen conectándose a la API de producción. Si la API cambia de dominio, actualiza el valor al compilar.
 - Si una ruta devuelve HTML u otro contenido que no sea JSON, el cliente muestra un error de respuesta del servidor en lugar de exponer un `FormatException`.
 - Timeout global de 12 segundos por petición.
 - Maneja errores HTTP convirtiendo el campo `detail` de la respuesta JSON en una excepción `ApiException`.

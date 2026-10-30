@@ -16,4 +16,5 @@ fi
 
 flutter config --enable-web --no-analytics
 flutter pub get
-flutter build web --release
+api_base_url="${API_BASE_URL:-https://queensgame-2fk.pages.dev}"
+flutter build web --release --dart-define="API_BASE_URL=${api_base_url}"

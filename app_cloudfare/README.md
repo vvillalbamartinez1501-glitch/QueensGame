@@ -9,8 +9,10 @@ integrado en Cloudflare:
   rutas `/api/...` del juego.
 - **D1** guarda partidas, historial de movimientos y récords en SQLite remoto.
 
-El navegador llama a `/api` en el mismo dominio. No hace falta definir
-`API_BASE_URL` ni configurar CORS para el despliegue normal.
+El cliente web usa por defecto la API publicada en
+`https://queensgame-2fk.pages.dev`. Si despliegas la API en otro dominio,
+configura `API_BASE_URL` con su URL HTTPS en el entorno de compilación de
+Cloudflare Pages. La API debe permitir solicitudes CORS desde el dominio web.
 
 ## Antes de empezar: cuenta y coste
 
@@ -118,8 +120,10 @@ actualizaciones normales de la web.
    - **D1 database:** `queens-game`
    - Aplica la misma vinculación al entorno de Production. Si vas a probar
      Preview Deployments, configura también allí la base que quieras usar.
-5. No añadas una variable `API_BASE_URL`: el cliente y la API usan el mismo
-   dominio. No introduzcas secretos ni información de pago.
+5. El build usa `https://queensgame-2fk.pages.dev` como API por defecto. Si la
+   API se publica en otro dominio, configura `API_BASE_URL` en **Settings →
+   Environment variables** para Production (y Preview si corresponde). No
+   introduzcas secretos ni información de pago.
 6. Guarda y lanza el primer despliegue. El primer build descarga Flutter y puede
    tardar varios minutos; los siguientes builds pueden reutilizar la caché de
    dependencias de Pages.

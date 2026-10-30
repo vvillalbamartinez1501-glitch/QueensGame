@@ -1,6 +1,10 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+
+const _defaultApiBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'https://queensgame-2fk.pages.dev',
+);
 
 class ApiException implements Exception {
   final String message;
@@ -13,10 +17,10 @@ class ApiException implements Exception {
 class ApiService {
   static const Duration _timeout = Duration(seconds: 15);
 
-  static String get _baseUrl {
-    if (kIsWeb) return Uri.base.origin;
-    return 'https://queensgame-2fk.pages.dev';
-  }
+  static final String _baseUrl = _defaultApiBaseUrl.replaceFirst(
+    RegExp(r'/$'),
+    '',
+  );
 
   static Future<Map<String, dynamic>> _request(
     String method,
