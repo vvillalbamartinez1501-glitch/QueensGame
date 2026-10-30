@@ -179,6 +179,11 @@ class _GameScreenState extends State<GameScreen> {
   bool _isPan = false;
   /// Erase crosses only when the drag starts on a crossed cell.
   bool _eraseCrosses = false;
+  int _dragStrokeId = 0;
+  int? _undoStrokeId;
+  int _undoMoveCount = 1;
+  bool _undoing = false;
+  Future<void> _dragOperations = Future<void>.value();
   /// Cells already crossed in the current drag gesture (avoid double-calls)
   final Set<String> _pannedCells = {};
   /// For double-tap detection: time and coords of last tap
@@ -203,10 +208,13 @@ class _GameScreenState extends State<GameScreen> {
   // GAME ACTIONS
   // ─────────────────────────────────────────────────────────────
   Future<void> _newGame() async {
+    await _dragOperations;
     _ticker?.cancel();
     setState(() { _loading = true; _error = null; _game = null; _elapsed = 0; });
     try {
       _apply(await ApiService.createGame(widget.boardSize));
+      _undoMoveCount = 1;
+      _undoStrokeId = null;
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
     }
@@ -225,18 +233,72 @@ class _GameScreenState extends State<GameScreen> {
     if (won) _winDialog(g);
   }
 
-  Future<void> _cell(int row, int col, String action) async {
-    if (_game == null || _game!['is_won'] == true) return;
-    try { _apply(await ApiService.updateCell(_game!['game_id'], row, col, action)); }
-    catch (e) { _snack(e.toString()); }
+  Future<bool> _cell(int row, int col, String action, {int? dragStrokeId}) async {
+    if (dragStrokeId == null) await _dragOperations;
+    if ((_undoing && dragStrokeId == null) ||
+        _game == null ||
+        _game!['is_won'] == true) {
+      return false;
+    }
+    try {
+      _apply(await ApiService.updateCell(_game!['game_id'], row, col, action));
+      if (dragStrokeId == null) {
+        _undoMoveCount = 1;
+        _undoStrokeId = null;
+      } else {
+        if (_undoStrokeId != dragStrokeId) {
+          _undoMoveCount = 0;
+          _undoStrokeId = dragStrokeId;
+        }
+        _undoMoveCount++;
+      }
+      return true;
+    } catch (e) {
+      _snack(e.toString());
+      return false;
+    }
   }
 
-  Future<void> _undo()  async { try { _apply(await ApiService.undo(_game!['game_id']));  } catch (e) { _snack(e.toString()); } }
-  Future<void> _reset() async { try { _apply(await ApiService.reset(_game!['game_id'])); } catch (e) { _snack(e.toString()); } }
-  Future<void> _hint()  async { try { _apply(await ApiService.hint(_game!['game_id']));  } catch (e) { _snack(e.toString()); } }
+  Future<void> _undo() async {
+    if (_game == null || _undoing) return;
+    _undoing = true;
+    try {
+      await _dragOperations;
+      final gameId = _game!['game_id'];
+      while (_undoMoveCount > 0) {
+        _apply(await ApiService.undo(gameId));
+        _undoMoveCount--;
+      }
+      _undoMoveCount = 1;
+      _undoStrokeId = null;
+    } catch (e) {
+      _snack(e.toString());
+    } finally {
+      _undoing = false;
+    }
+  }
+
+  Future<void> _reset() async {
+    await _dragOperations;
+    try {
+      _apply(await ApiService.reset(_game!['game_id']));
+      _undoMoveCount = 1;
+      _undoStrokeId = null;
+    } catch (e) { _snack(e.toString()); }
+  }
+
+  Future<void> _hint() async {
+    await _dragOperations;
+    try {
+      _apply(await ApiService.hint(_game!['game_id']));
+      _undoMoveCount = 1;
+      _undoStrokeId = null;
+    } catch (e) { _snack(e.toString()); }
+  }
 
   Future<void> _toggleAuto() async {
     if (_game == null) return;
+    await _dragOperations;
     final next = !_autoCross;
     try {
       _apply(await ApiService.setAutoCross(_game!['game_id'], next));
@@ -264,8 +326,10 @@ class _GameScreenState extends State<GameScreen> {
   /// The whole board is wrapped in a single GestureDetector.
   /// We translate (dx,dy) → (row,col) from the board's top-left.
   void _onPanStart(Offset local, double cellSize) {
+    if (_undoing) return;
     _isPan = false;
     _eraseCrosses = false;
+    _dragStrokeId++;
     _pannedCells.clear();
     final (row, col) = _pos2cell(local, cellSize);
     if (row < 0) return;
@@ -273,7 +337,7 @@ class _GameScreenState extends State<GameScreen> {
     final k = '$row,$col';
     _pannedCells.add(k);
     _eraseCrosses = _boardData[row][col] == 2;
-    if (_eraseCrosses) _cell(row, col, 'cross');
+    if (_eraseCrosses) _queueDragCell(row, col);
   }
 
   void _onPanUpdate(Offset local, double cellSize) {
@@ -285,9 +349,16 @@ class _GameScreenState extends State<GameScreen> {
       _pannedCells.add(k);
       final isCrossed = _boardData[row][col] == 2;
       if (_eraseCrosses ? isCrossed : !isCrossed) {
-        _cell(row, col, 'cross');
+        _queueDragCell(row, col);
       }
     }
+  }
+
+  void _queueDragCell(int row, int col) {
+    final strokeId = _dragStrokeId;
+    _dragOperations = _dragOperations.then(
+      (_) => _cell(row, col, 'cross', dragStrokeId: strokeId).then((_) {}),
+    );
   }
 
   void _onPanEnd() {
