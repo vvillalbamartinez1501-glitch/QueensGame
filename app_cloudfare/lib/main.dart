@@ -177,6 +177,8 @@ class _GameScreenState extends State<GameScreen> {
   // ── Touch interaction state ──────────────────────────────────
   /// Tracks if the current gesture started as a drag (pan)
   bool _isPan = false;
+  /// Erase crosses only when the drag starts on a crossed cell.
+  bool _eraseCrosses = false;
   /// Cells already crossed in the current drag gesture (avoid double-calls)
   final Set<String> _pannedCells = {};
   /// For double-tap detection: time and coords of last tap
@@ -263,13 +265,15 @@ class _GameScreenState extends State<GameScreen> {
   /// We translate (dx,dy) → (row,col) from the board's top-left.
   void _onPanStart(Offset local, double cellSize) {
     _isPan = false;
+    _eraseCrosses = false;
     _pannedCells.clear();
     final (row, col) = _pos2cell(local, cellSize);
     if (row < 0) return;
     _isPan = true;
     final k = '$row,$col';
     _pannedCells.add(k);
-    // Don't cross on pan-start — wait for a second cell to confirm it's a drag
+    _eraseCrosses = _boardData[row][col] == 2;
+    if (_eraseCrosses) _cell(row, col, 'cross');
   }
 
   void _onPanUpdate(Offset local, double cellSize) {
@@ -279,13 +283,17 @@ class _GameScreenState extends State<GameScreen> {
     final k = '$row,$col';
     if (!_pannedCells.contains(k)) {
       _pannedCells.add(k);
-      _cell(row, col, 'cross');
+      final isCrossed = _boardData[row][col] == 2;
+      if (_eraseCrosses ? isCrossed : !isCrossed) {
+        _cell(row, col, 'cross');
+      }
     }
   }
 
   void _onPanEnd() {
     // If only 1 cell panned → it was actually a tap, handled by onTap
     _isPan = false;
+    _eraseCrosses = false;
     _pannedCells.clear();
   }
 
@@ -541,10 +549,31 @@ class _GameScreenState extends State<GameScreen> {
                 final err    = errs.contains('$row,$col');
                 final base   = _rc(region);
                 final cellColor = err ? Color.lerp(base, _errC, 0.45)! : base;
+                final regionSide = BorderSide(
+                  color: Colors.black.withAlpha(100),
+                  width: 1.2,
+                );
+                const cellSide = BorderSide(
+                  color: Color.fromARGB(55, 0, 0, 0),
+                  width: 0.5,
+                );
                 return Container(
                   decoration: BoxDecoration(
                     color: cellColor,
-                    border: Border.all(color: Colors.black.withAlpha(55), width: 0.5),
+                    border: Border(
+                      top: row == 0 || regs[row - 1][col] != region
+                          ? regionSide
+                          : cellSide,
+                      bottom: row == n - 1 || regs[row + 1][col] != region
+                          ? regionSide
+                          : cellSide,
+                      left: col == 0 || regs[row][col - 1] != region
+                          ? regionSide
+                          : cellSide,
+                      right: col == n - 1 || regs[row][col + 1] != region
+                          ? regionSide
+                          : cellSide,
+                    ),
                     boxShadow: err ? [BoxShadow(color: _errC.withAlpha(90), blurRadius: 4)] : null,
                   ),
                   child: Center(child: _icon(state, cs)),

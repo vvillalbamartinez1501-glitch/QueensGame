@@ -347,19 +347,19 @@ class _GameScreenState extends State<GameScreen> {
                         border: Border(
                           top: BorderSide(
                             color: borderColor,
-                            width: top ? 2.2 : 0.5,
+                            width: top ? 1.2 : 0.5,
                           ),
                           bottom: BorderSide(
                             color: borderColor,
-                            width: bottom ? 2.2 : 0.5,
+                            width: bottom ? 1.2 : 0.5,
                           ),
                           left: BorderSide(
                             color: borderColor,
-                            width: left ? 2.2 : 0.5,
+                            width: left ? 1.2 : 0.5,
                           ),
                           right: BorderSide(
                             color: borderColor,
-                            width: right ? 2.2 : 0.5,
+                            width: right ? 1.2 : 0.5,
                           ),
                         ),
                       ),
