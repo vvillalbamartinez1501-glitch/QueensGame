@@ -421,9 +421,18 @@ class _GameScreenState extends State<GameScreen> {
     _flushPendingTap();
     await _gameOperations;
     try {
-      _apply(await ApiService.hint(_game!['game_id']));
+      final response = await ApiService.hint(_game!['game_id']);
+      final game = response['game'];
+      if (game is! Map<String, dynamic>) {
+        throw ApiException('El servidor devolvió una pista inesperada.');
+      }
+      _apply(game);
       _undoMoveCount = 1;
       _undoStrokeId = null;
+      final message = response['message']?.toString() ?? 'Pista: reina colocada.';
+      _notice(message.startsWith('Pista:')
+          ? '$message Esta casilla forma parte de una solución válida que respeta las filas, columnas, regiones y separación entre reinas.'
+          : message);
     } catch (e) { _snack(e.toString()); }
   }
 
@@ -598,6 +607,16 @@ class _GameScreenState extends State<GameScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg), backgroundColor: _errC,
       behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 3),
+    ));
+  }
+
+  void _notice(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: _surface,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 4),
     ));
   }
 
